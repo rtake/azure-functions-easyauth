@@ -17,6 +17,10 @@ param runtimeVersion string = '20'
 @secure()
 param oboClientSecret string
 
+@description('Client secret of the Easy Auth app registration used by App Service authentication to acquire provider tokens.')
+@secure()
+param easyAuthClientSecret string = ''
+
 var resourceToken = take(toLower(uniqueString(resourceGroup().id, location)), 6)
 
 var tenantId = subscription().tenantId
@@ -80,6 +84,10 @@ resource apiServicePrincipal 'Microsoft.Graph/servicePrincipals@v1.0' = {
   appId: apiAppRegistration.appId
 }
 
+resource microsoftGraphServicePrincipal 'Microsoft.Graph/servicePrincipals@v1.0' existing = {
+  appId: microsoftGraphAppId
+}
+
 // For Easy Auth on the Function app
 resource easyAuthAppRegistration 'Microsoft.Graph/applications@v1.0' = {
   uniqueName: easyAuthApplicationUniqueName
@@ -126,6 +134,13 @@ resource easyAuthAdminConsent 'Microsoft.Graph/oauth2PermissionGrants@v1.0' = {
   scope: 'user_impersonation'
 }
 
+resource apiToMicrosoftGraphAdminConsent 'Microsoft.Graph/oauth2PermissionGrants@v1.0' = {
+  clientId: apiServicePrincipal.id
+  consentType: 'AllPrincipals'
+  resourceId: microsoftGraphServicePrincipal.id
+  scope: 'User.Read'
+}
+
 module storageAccount './modules/storage-account.bicep' = {
   name: 'storageAccount'
   params: {
@@ -143,6 +158,7 @@ module functionApp './modules/function-app.bicep' = {
     runtimeVersion: runtimeVersion
     tenantId: tenantId
     easyAuthClientId: easyAuthAppRegistration.appId
+    easyAuthClientSecret: easyAuthClientSecret
     oboClientId: apiAppRegistration.appId
     audience: audience
     oboClientSecret: oboClientSecret

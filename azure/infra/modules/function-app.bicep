@@ -4,6 +4,8 @@ param runtime string
 param runtimeVersion string
 param tenantId string
 param easyAuthClientId string
+@secure()
+param easyAuthClientSecret string
 param oboClientId string
 param audience string
 @secure()
@@ -13,6 +15,7 @@ param storageConnectionString string
 var planName = 'plan-${resourceToken}'
 var functionName = 'func-${resourceToken}'
 var appInsightsName = 'appi-${resourceToken}'
+var easyAuthClientSecretSettingName = 'MICROSOFT_PROVIDER_AUTHENTICATION_SECRET'
 
 resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
   name: appInsightsName
@@ -54,7 +57,7 @@ resource functionApp 'Microsoft.Web/sites@2024-04-01' = {
 
   resource appsettings 'config' = {
     name: 'appsettings'
-    properties: {
+    properties: union({
       AzureWebJobsStorage: storageConnectionString
       FUNCTIONS_WORKER_RUNTIME: runtime
       FUNCTIONS_EXTENSION_VERSION: '~4'
@@ -65,7 +68,9 @@ resource functionApp 'Microsoft.Web/sites@2024-04-01' = {
       GRAPH_SCOPE: 'https://graph.microsoft.com/User.Read'
       GRAPH_ENDPOINT: 'https://graph.microsoft.com/v1.0/me'
       WEBSITE_RUN_FROM_PACKAGE: '1'
-    }
+    }, empty(easyAuthClientSecret) ? {} : {
+      '${easyAuthClientSecretSettingName}': easyAuthClientSecret
+    })
   }
 }
 
@@ -83,6 +88,9 @@ resource auth 'Microsoft.Web/sites/config@2022-09-01' = {
         registration: {
           clientId: easyAuthClientId
           openIdIssuer: '${environment().authentication.loginEndpoint}${tenantId}/v2.0'
+          clientSecretSettingName: empty(easyAuthClientSecret)
+            ? null
+            : easyAuthClientSecretSettingName
         }
         login: {
           loginParameters: [

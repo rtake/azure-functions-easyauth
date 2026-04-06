@@ -12,6 +12,19 @@ az deployment group create \
   -p infra/param.bicepparam
 ```
 
+Easy Auth から `/.auth/me` でアクセストークンを取得したい場合は、Easy Auth 用アプリ登録にも client secret が必要です。
+この構成では、ブラウザにはトークンを持たせず、Easy Auth が保持したトークンを Function から `/.auth/me` 経由で取得して OBO に使います。
+そのため `infra/main.bicep` の `easyAuthClientSecret` には、Easy Auth 用アプリ登録に発行した client secret を設定してください。
+
+- `easyAuthClientSecret`
+  Easy Auth が ID プロバイダーからユーザートークンを取得し、token store (`/.auth/me`) に保持するために使います
+- `oboClientSecret`
+  Function App が OBO で Microsoft Graph 用アクセストークンを交換するために使います
+
+参考:
+- https://learn.microsoft.com/en-us/azure/app-service/configure-authentication-oauth-tokens
+- https://learn.microsoft.com/en-gb/azure/app-service/overview-authentication-authorization
+
 デプロイ前に構成の変更をレビューしたい場合は以下のDry-run用コマンドを実行してください。
 
 ```
