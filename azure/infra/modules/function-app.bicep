@@ -3,8 +3,11 @@ param resourceToken string
 param runtime string
 param runtimeVersion string
 param tenantId string
-param clientId string
+param easyAuthClientId string
+param oboClientId string
 param audience string
+@secure()
+param oboClientSecret string
 param storageConnectionString string
 
 var planName = 'plan-${resourceToken}'
@@ -56,6 +59,11 @@ resource functionApp 'Microsoft.Web/sites@2024-04-01' = {
       FUNCTIONS_WORKER_RUNTIME: runtime
       FUNCTIONS_EXTENSION_VERSION: '~4'
       APPLICATIONINSIGHTS_CONNECTION_STRING: appInsights.properties.ConnectionString
+      OBO_TENANT_ID: tenantId
+      OBO_CLIENT_ID: oboClientId
+      OBO_CLIENT_SECRET: oboClientSecret
+      GRAPH_SCOPE: 'https://graph.microsoft.com/User.Read'
+      GRAPH_ENDPOINT: 'https://graph.microsoft.com/v1.0/me'
       WEBSITE_RUN_FROM_PACKAGE: '1'
     }
   }
@@ -73,8 +81,13 @@ resource auth 'Microsoft.Web/sites/config@2022-09-01' = {
       azureActiveDirectory: {
         enabled: true
         registration: {
-          clientId: clientId
-          openIdIssuer: 'https://sts.windows.net/${tenantId}/'
+          clientId: easyAuthClientId
+          openIdIssuer: '${environment().authentication.loginEndpoint}${tenantId}/v2.0'
+        }
+        login: {
+          loginParameters: [
+            'scope=openid profile email offline_access ${audience}/user_impersonation'
+          ]
         }
         validation: {
           allowedAudiences: [

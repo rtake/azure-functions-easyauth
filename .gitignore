@@ -2,3 +2,5 @@ node_modules/
 dist/
 .vscode/
 .DS_Store
+azure/infra/param.bicepparam
+azure/functions/local.settings.json
