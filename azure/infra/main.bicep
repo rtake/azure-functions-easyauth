@@ -3,11 +3,6 @@ extension microsoftGraphV1
 param location string = resourceGroup().location
 
 @description('Function runtime')
-@allowed([
-  'node'
-  'python'
-  'dotnet-isolated'
-])
 param runtime string = 'node'
 
 @description('Runtime version')
@@ -22,21 +17,17 @@ param oboClientSecret string
 param easyAuthClientSecret string = ''
 
 var resourceToken = take(toLower(uniqueString(resourceGroup().id, location)), 6)
-
-var tenantId = subscription().tenantId
 var ownerObjectId = deployer().objectId
+
+// For downstream API
 var apiApplicationUniqueName = 'api-${resourceToken}'
 var apiApplicationDisplayName = 'API ${resourceToken}'
-var easyAuthApplicationUniqueName = 'web-${resourceToken}'
-var easyAuthApplicationDisplayName = 'Web ${resourceToken}'
-var audience = 'api://${apiApplicationUniqueName}'
-var functionAppName = 'func-${resourceToken}'
-var functionAppAuthCallbackUrl = 'https://${functionAppName}.azurewebsites.net/.auth/login/aad/callback'
 var userImpersonationScopeId = guid(apiApplicationUniqueName, 'user_impersonation')
+var audience = 'api://${apiApplicationUniqueName}'
+
 var microsoftGraphAppId = '00000003-0000-0000-c000-000000000000'
 var microsoftGraphUserReadScopeId = 'e1fe6dd8-ba31-4d61-89e7-88639da4683d'
 
-// For downstream API
 resource apiAppRegistration 'Microsoft.Graph/applications@v1.0' = {
   uniqueName: apiApplicationUniqueName
   displayName: apiApplicationDisplayName
@@ -88,7 +79,18 @@ resource microsoftGraphServicePrincipal 'Microsoft.Graph/servicePrincipals@v1.0'
   appId: microsoftGraphAppId
 }
 
+resource apiToMicrosoftGraphAdminConsent 'Microsoft.Graph/oauth2PermissionGrants@v1.0' = {
+  clientId: apiServicePrincipal.id
+  consentType: 'AllPrincipals'
+  resourceId: microsoftGraphServicePrincipal.id
+  scope: 'User.Read'
+}
+
 // For Easy Auth on the Function app
+var easyAuthApplicationUniqueName = 'web-${resourceToken}'
+var easyAuthApplicationDisplayName = 'Web ${resourceToken}'
+var functionAppAuthCallbackUrl = 'https://func-${resourceToken}.azurewebsites.net/.auth/login/aad/callback'
+
 resource easyAuthAppRegistration 'Microsoft.Graph/applications@v1.0' = {
   uniqueName: easyAuthApplicationUniqueName
   displayName: easyAuthApplicationDisplayName
@@ -134,13 +136,6 @@ resource easyAuthAdminConsent 'Microsoft.Graph/oauth2PermissionGrants@v1.0' = {
   scope: 'user_impersonation'
 }
 
-resource apiToMicrosoftGraphAdminConsent 'Microsoft.Graph/oauth2PermissionGrants@v1.0' = {
-  clientId: apiServicePrincipal.id
-  consentType: 'AllPrincipals'
-  resourceId: microsoftGraphServicePrincipal.id
-  scope: 'User.Read'
-}
-
 module storageAccount './modules/storage-account.bicep' = {
   name: 'storageAccount'
   params: {
@@ -148,6 +143,9 @@ module storageAccount './modules/storage-account.bicep' = {
     storageName: 'storage${resourceToken}'
   }
 }
+
+// Function App with Easy Auth
+var tenantId = subscription().tenantId
 
 module functionApp './modules/function-app.bicep' = {
   name: 'functionApp'
