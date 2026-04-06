@@ -1,0 +1,85 @@
+<mxfile host="app.diagrams.net" agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36">
+  <diagram name="ページ-1" id="Q35Ce9-m6S1H87CTMifg">
+    <mxGraphModel dx="964" dy="1780" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="OkJy2qTlg8aXZMw7Piwr-3" edge="1" parent="1" source="FhSr6FzkhYptrDeaPLzR-1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="OkJy2qTlg8aXZMw7Piwr-1" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="FhSr6FzkhYptrDeaPLzR-1" parent="1" style="image;aspect=fixed;html=1;points=[];align=center;fontSize=12;image=img/lib/azure2/networking/Front_Doors.svg;" value="" vertex="1">
+          <mxGeometry height="60" width="68" x="110" y="140" as="geometry" />
+        </mxCell>
+        <mxCell id="FhSr6FzkhYptrDeaPLzR-5" edge="1" parent="1" source="FhSr6FzkhYptrDeaPLzR-1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.014;entryY=0.554;entryDx=0;entryDy=0;entryPerimeter=0;" target="FhSr6FzkhYptrDeaPLzR-3" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="348" y="170" as="sourcePoint" />
+            <mxPoint x="550" y="170" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="FhSr6FzkhYptrDeaPLzR-8" connectable="0" parent="1" style="group" value="" vertex="1">
+          <mxGeometry height="86" width="96" x="330" y="300" as="geometry" />
+        </mxCell>
+        <mxCell id="OkJy2qTlg8aXZMw7Piwr-4" parent="FhSr6FzkhYptrDeaPLzR-8" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="Static Web Apps" vertex="1">
+          <mxGeometry height="30" width="96" y="56" as="geometry" />
+        </mxCell>
+        <mxCell id="FhSr6FzkhYptrDeaPLzR-3" parent="FhSr6FzkhYptrDeaPLzR-8" style="image;aspect=fixed;html=1;points=[];align=center;fontSize=12;image=img/lib/azure2/preview/Static_Apps.svg;" value="" vertex="1">
+          <mxGeometry height="56.00000000000001" width="70" x="13" as="geometry" />
+        </mxCell>
+        <mxCell id="FhSr6FzkhYptrDeaPLzR-11" connectable="0" parent="1" style="group" value="" vertex="1">
+          <mxGeometry height="90" width="96" x="330" y="140" as="geometry" />
+        </mxCell>
+        <mxCell id="OkJy2qTlg8aXZMw7Piwr-1" parent="FhSr6FzkhYptrDeaPLzR-11" style="image;aspect=fixed;html=1;points=[];align=center;fontSize=12;image=img/lib/azure2/compute/Function_Apps.svg;" value="" vertex="1">
+          <mxGeometry height="60" width="68" x="14" as="geometry" />
+        </mxCell>
+        <mxCell id="FhSr6FzkhYptrDeaPLzR-9" parent="FhSr6FzkhYptrDeaPLzR-11" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="Functions&lt;div&gt;(Auth service)&lt;/div&gt;" vertex="1">
+          <mxGeometry height="30" width="96" y="60" as="geometry" />
+        </mxCell>
+        <mxCell id="FhSr6FzkhYptrDeaPLzR-12" connectable="0" parent="1" style="group" value="" vertex="1">
+          <mxGeometry height="90" width="100" x="650" y="140" as="geometry" />
+        </mxCell>
+        <mxCell id="FhSr6FzkhYptrDeaPLzR-6" parent="FhSr6FzkhYptrDeaPLzR-12" style="image;aspect=fixed;html=1;points=[];align=center;fontSize=12;image=img/lib/azure2/compute/Function_Apps.svg;" value="" vertex="1">
+          <mxGeometry height="60" width="68" x="14" as="geometry" />
+        </mxCell>
+        <mxCell id="FhSr6FzkhYptrDeaPLzR-10" parent="FhSr6FzkhYptrDeaPLzR-12" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="Functions&lt;div&gt;(Downstream API)&lt;/div&gt;" vertex="1">
+          <mxGeometry height="30" width="100" x="-2" y="60" as="geometry" />
+        </mxCell>
+        <mxCell id="FhSr6FzkhYptrDeaPLzR-16" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="Front Door" vertex="1">
+          <mxGeometry height="30" width="96" x="96" y="200" as="geometry" />
+        </mxCell>
+        <mxCell id="FhSr6FzkhYptrDeaPLzR-22" edge="1" parent="1" source="OkJy2qTlg8aXZMw7Piwr-1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="FhSr6FzkhYptrDeaPLzR-21" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="FhSr6FzkhYptrDeaPLzR-23" connectable="0" parent="1" style="group" value="" vertex="1">
+          <mxGeometry height="90" width="96" x="330" y="-20" as="geometry" />
+        </mxCell>
+        <mxCell id="FhSr6FzkhYptrDeaPLzR-18" parent="FhSr6FzkhYptrDeaPLzR-23" style="image;aspect=fixed;html=1;points=[];align=center;fontSize=12;image=img/lib/azure2/other/Entra_Identity.svg;" value="" vertex="1">
+          <mxGeometry height="60.440000000000005" width="68" x="14" as="geometry" />
+        </mxCell>
+        <mxCell id="FhSr6FzkhYptrDeaPLzR-21" parent="FhSr6FzkhYptrDeaPLzR-23" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="Entra ID" vertex="1">
+          <mxGeometry height="30" width="96" y="60" as="geometry" />
+        </mxCell>
+        <mxCell id="FhSr6FzkhYptrDeaPLzR-24" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="On-Behalf-Of flow" vertex="1">
+          <mxGeometry height="30" width="100" x="430" y="120" as="geometry" />
+        </mxCell>
+        <mxCell id="FhSr6FzkhYptrDeaPLzR-25" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="Easy Auth" vertex="1">
+          <mxGeometry height="30" width="60" x="310" y="100" as="geometry" />
+        </mxCell>
+        <mxCell id="FhSr6FzkhYptrDeaPLzR-26" parent="1" style="image;aspect=fixed;html=1;points=[];align=center;fontSize=12;image=img/lib/azure2/identity/Enterprise_Applications.svg;" value="" vertex="1">
+          <mxGeometry height="64" width="64" x="666" y="-20" as="geometry" />
+        </mxCell>
+        <mxCell id="FhSr6FzkhYptrDeaPLzR-27" edge="1" parent="1" source="OkJy2qTlg8aXZMw7Piwr-1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="FhSr6FzkhYptrDeaPLzR-6">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="FhSr6FzkhYptrDeaPLzR-31" edge="1" parent="1" source="FhSr6FzkhYptrDeaPLzR-29" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="FhSr6FzkhYptrDeaPLzR-6" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="FhSr6FzkhYptrDeaPLzR-29" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="Enterprise Applications" vertex="1">
+          <mxGeometry height="30" width="130" x="633" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="FhSr6FzkhYptrDeaPLzR-33" edge="1" parent="1" source="OkJy2qTlg8aXZMw7Piwr-1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;entryPerimeter=0;" target="FhSr6FzkhYptrDeaPLzR-26">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
