@@ -4,3 +4,7 @@ dist/
 .DS_Store
 azure/infra/param.bicepparam
 azure/functions/local.settings.json
+
+*.pem
+*.crt
+*.key

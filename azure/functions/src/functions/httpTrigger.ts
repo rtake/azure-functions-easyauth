@@ -29,6 +29,16 @@ type EasyAuthIdentity = {
   id_token?: string;
 };
 
+type AuthEvidence = {
+  hasBearerAuthorization: boolean;
+  hasEasyAuthAccessTokenHeader: boolean;
+  hasEasyAuthIdTokenHeader: boolean;
+  hasClientPrincipalHeader: boolean;
+  hasAppServiceAuthSessionCookie: boolean;
+  requestHost?: string;
+  requestProto?: string;
+};
+
 /* =========================
  * Config / Env
  * ========================= */
@@ -89,18 +99,58 @@ function getEasyAuthHeader(req: HttpRequest): string | undefined {
   );
 }
 
+function resolveRequestProto(req: HttpRequest): string {
+  return (
+    req.headers.get("x-forwarded-proto") ??
+    req.headers.get("x-appservice-proto") ??
+    safeParseUrl(req.url)?.protocol.replace(":", "") ??
+    "https"
+  );
+}
+
+function resolveRequestHost(req: HttpRequest): string | undefined {
+  return (
+    req.headers.get("x-forwarded-host") ??
+    req.headers.get("x-original-host") ??
+    req.headers.get("host") ??
+    safeParseUrl(req.url)?.host ??
+    undefined
+  );
+}
+
+function safeParseUrl(url: string): URL | undefined {
+  try {
+    return new URL(url);
+  } catch {
+    return undefined;
+  }
+}
+
+function getAuthEvidence(req: HttpRequest): AuthEvidence {
+  const cookie = req.headers.get("cookie") ?? "";
+
+  return {
+    hasBearerAuthorization: !!getBearerToken(req),
+    hasEasyAuthAccessTokenHeader: !!req.headers.get(
+      "x-ms-token-aad-access-token",
+    ),
+    hasEasyAuthIdTokenHeader: !!req.headers.get("x-ms-token-aad-id-token"),
+    hasClientPrincipalHeader: !!req.headers.get("x-ms-client-principal"),
+    hasAppServiceAuthSessionCookie: cookie.includes("AppServiceAuthSession="),
+    requestHost: resolveRequestHost(req),
+    requestProto: resolveRequestProto(req),
+  };
+}
+
 async function getEasyAuthCookie(
   req: HttpRequest,
 ): Promise<string | undefined> {
   const cookie = req.headers.get("cookie");
-  const host = req.headers.get("host");
+  const host = resolveRequestHost(req);
 
   if (!cookie?.includes("AppServiceAuthSession=") || !host) return;
 
-  const proto =
-    req.headers.get("x-forwarded-proto") ??
-    req.headers.get("x-appservice-proto") ??
-    "https";
+  const proto = resolveRequestProto(req);
 
   const identities = await httpGetJson<EasyAuthIdentity[]>(
     `${proto}://${host}/.auth/me`,
@@ -126,6 +176,34 @@ function getCertificatePath(): Promise<string> {
   return certificateCache;
 }
 
+function normalizePemSecret(value: string): string {
+  let normalized = value.trim();
+
+  // Some Key Vault upload flows store PEM as a single-line string with literal \n.
+  if (
+    (normalized.startsWith('"') && normalized.endsWith('"')) ||
+    (normalized.startsWith("'") && normalized.endsWith("'"))
+  ) {
+    normalized = normalized.slice(1, -1);
+  }
+
+  normalized = normalized.replace(/\r\n/g, "\n").replace(/\\n/g, "\n");
+
+  if (!normalized.includes("-----BEGIN CERTIFICATE-----")) {
+    throw new Error("Key Vault secret does not contain a PEM certificate block");
+  }
+
+  if (
+    !normalized.includes("-----BEGIN PRIVATE KEY-----") &&
+    !normalized.includes("-----BEGIN RSA PRIVATE KEY-----") &&
+    !normalized.includes("-----BEGIN ENCRYPTED PRIVATE KEY-----")
+  ) {
+    throw new Error("Key Vault secret does not contain a PEM private key block");
+  }
+
+  return normalized;
+}
+
 async function loadCertificate(): Promise<string> {
   const secretUri = getEnv("OBO_CLIENT_CERTIFICATE_SECRET_URI");
 
@@ -148,11 +226,13 @@ async function loadCertificate(): Promise<string> {
     throw new Error("KeyVault secret missing value");
   }
 
-  const hash = createHash("sha256").update(secret.value).digest("hex");
+  const pem = normalizePemSecret(secret.value);
+
+  const hash = createHash("sha256").update(pem).digest("hex");
 
   const path = join(tmpdir(), `obo-cert-${hash}.pem`);
 
-  await writeFile(path, secret.value, {
+  await writeFile(path, pem, {
     encoding: "utf8",
     mode: 0o600,
   });
@@ -204,11 +284,12 @@ function ok(body: unknown): HttpResponseInit {
   return { status: 200, jsonBody: body };
 }
 
-function unauthorized(): HttpResponseInit {
+function unauthorized(req: HttpRequest): HttpResponseInit {
   return {
     status: 401,
     jsonBody: {
       error: "Bearer / EasyAuth token / AppServiceAuthSession required",
+      evidence: getAuthEvidence(req),
     },
   };
 }
@@ -232,7 +313,7 @@ async function httpTrigger(
 ): Promise<HttpResponseInit> {
   try {
     const assertion = await resolveUserAssertion(req);
-    if (!assertion) return unauthorized();
+    if (!assertion) return unauthorized(req);
 
     const token = await exchangeTokenOnBehalfOf(assertion);
     const me = await fetchGraphMe(token);
