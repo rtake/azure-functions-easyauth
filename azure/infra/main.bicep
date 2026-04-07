@@ -11,6 +11,9 @@ param runtimeVersion string = '20'
 @description('SecretUri of the existing Key Vault secret that contains the OBO client certificate PEM.')
 param oboClientCertificateSecretUri string
 
+@description('Resource group name that contains the existing Key Vault. Defaults to the current deployment resource group.')
+param oboClientCertificateKeyVaultResourceGroupName string = resourceGroup().name
+
 @description('Client secret of the Easy Auth app registration used by App Service authentication to acquire provider tokens.')
 @secure()
 param easyAuthClientSecret string = ''
@@ -163,24 +166,12 @@ module functionApp './modules/function-app.bicep' = {
 
 var oboClientCertificateKeyVaultName = split(split(oboClientCertificateSecretUri, '://')[1], '.')[0]
 
-resource existingKeyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
-  name: oboClientCertificateKeyVaultName
-}
-
-resource keyVaultFunctionAccessPolicy 'Microsoft.KeyVault/vaults/accessPolicies@2023-07-01' = {
-  parent: existingKeyVault
-  name: 'add'
-  properties: {
-    accessPolicies: [
-      {
-        tenantId: tenantId
-        objectId: functionApp.outputs.functionPrincipalId
-        permissions: {
-          secrets: [
-            'get'
-          ]
-        }
-      }
-    ]
+module keyVaultFunctionAccessPolicy './modules/keyvault-access-policy.bicep' = {
+  name: 'keyVaultFunctionAccessPolicy'
+  scope: resourceGroup(subscription().subscriptionId, oboClientCertificateKeyVaultResourceGroupName)
+  params: {
+    keyVaultName: oboClientCertificateKeyVaultName
+    tenantId: tenantId
+    objectId: functionApp.outputs.functionPrincipalId
   }
 }

@@ -27,6 +27,7 @@ az deployment group create \
 ![](/docs/keyvault-create-secret.png)
 
 `param.bicepparam` の `oboClientCertificateSecretUri` に作成したシークレットのURIを設定します。
+Key Vault を別のリソースグループに置く場合は、`oboClientCertificateKeyVaultResourceGroupName` にそのリソースグループ名も設定します。
 
 ### リソースデプロイ
 
@@ -51,6 +52,8 @@ Easy Auth から `/.auth/me` でアクセストークンを取得したい場合
   Easy Auth が ID プロバイダーからユーザートークンを取得し、token store (`/.auth/me`) に保持するために使います
 - `oboClientCertificateSecretUri`
   既存 Key Vault secret の `SecretUri` です
+- `oboClientCertificateKeyVaultResourceGroupName`
+  既存 Key Vault が存在するリソースグループ名です。省略時はデプロイ先と同じリソースグループを使います
 
 Function App は証明書 PEM を app setting に展開せず、managed identity で Key Vault の secret を実行時に直接取得して OBO に使います。
 公開証明書は、OBO に使うアプリ登録へ事前に登録しておいてください。
