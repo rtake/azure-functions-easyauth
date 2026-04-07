@@ -8,3 +8,5 @@ azure/functions/local.settings.json
 *.pem
 *.crt
 *.key
+
+spa/.env.production

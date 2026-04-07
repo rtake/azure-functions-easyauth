@@ -147,6 +147,11 @@ module storageAccount './modules/storage-account.bicep' = {
   }
 }
 
+var spaStaticWebsiteUrl = storageAccount.outputs.staticWebsiteUrl
+var spaStaticWebsiteOrigin = endsWith(spaStaticWebsiteUrl, '/')
+  ? substring(spaStaticWebsiteUrl, 0, max(length(spaStaticWebsiteUrl) - 1, 0))
+  : spaStaticWebsiteUrl
+
 module functionApp './modules/function-app.bicep' = {
   name: 'functionApp'
   params: {
@@ -161,6 +166,13 @@ module functionApp './modules/function-app.bicep' = {
     audience: audience
     oboClientCertificateSecretUri: oboClientCertificateSecretUri
     storageConnectionString: storageAccount.outputs.storageConnectionString
+    allowedOrigins: [
+      spaStaticWebsiteOrigin
+    ]
+    allowedExternalRedirectUrls: [
+      spaStaticWebsiteOrigin
+      spaStaticWebsiteUrl
+    ]
   }
 }
 
@@ -175,3 +187,9 @@ module keyVaultFunctionAccessPolicy './modules/keyvault-access-policy.bicep' = {
     objectId: functionApp.outputs.functionPrincipalId
   }
 }
+
+output spaStaticWebsiteUrl string = spaStaticWebsiteUrl
+output spaStorageName string = storageAccount.outputs.storageName
+output functionAppName string = functionApp.outputs.functionName
+output functionAppUrl string = 'https://${functionApp.outputs.functionDefaultHostname}'
+output easyAuthLoginBaseUrl string = 'https://${functionApp.outputs.functionDefaultHostname}/.auth/login/aad'

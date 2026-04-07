@@ -288,7 +288,7 @@ function unauthorized(req: HttpRequest): HttpResponseInit {
   return {
     status: 401,
     jsonBody: {
-      error: "Bearer / EasyAuth token / AppServiceAuthSession required",
+      error: "AppServiceAuthSession or Easy Auth token required",
       evidence: getAuthEvidence(req),
     },
   };
@@ -337,8 +337,9 @@ async function httpTrigger(
  * Entry
  * ========================= */
 
-app.http("httpTrigger", {
-  methods: ["GET", "POST"],
+app.http("profile", {
+  methods: ["GET"],
   authLevel: "anonymous",
+  route: "profile",
   handler: httpTrigger,
 });

@@ -10,6 +10,8 @@ param oboClientId string
 param audience string
 param oboClientCertificateSecretUri string
 param storageConnectionString string
+param allowedOrigins array = []
+param allowedExternalRedirectUrls array = []
 
 var planName = 'plan-${resourceToken}'
 var functionName = 'func-${resourceToken}'
@@ -50,6 +52,10 @@ resource functionApp 'Microsoft.Web/sites@2024-04-01' = {
     siteConfig: {
       linuxFxVersion: '${runtime}|${runtimeVersion}'
       minTlsVersion: '1.2'
+      cors: {
+        allowedOrigins: allowedOrigins
+        supportCredentials: true
+      }
     }
   }
 
@@ -77,7 +83,7 @@ resource auth 'Microsoft.Web/sites/config@2022-09-01' = {
   properties: {
     globalValidation: {
       requireAuthentication: true
-      unauthenticatedClientAction: 'RedirectToLoginPage'
+      unauthenticatedClientAction: 'Return401'
     }
     identityProviders: {
       azureActiveDirectory: {
@@ -100,6 +106,8 @@ resource auth 'Microsoft.Web/sites/config@2022-09-01' = {
       }
     }
     login: {
+      allowedExternalRedirectUrls: allowedExternalRedirectUrls
+      preserveUrlFragmentsForLogins: true
       tokenStore: {
         enabled: true
       }
@@ -108,4 +116,5 @@ resource auth 'Microsoft.Web/sites/config@2022-09-01' = {
 }
 
 output functionName string = functionApp.name
+output functionDefaultHostname string = functionApp.properties.defaultHostName
 output functionPrincipalId string = functionApp.identity.principalId
