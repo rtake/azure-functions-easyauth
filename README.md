@@ -1,3 +1,35 @@
+## デプロイ
+
+### Downstrem APIの準備
+
+- アプリ登録
+
+### Key Vaultの作成とクライアントシークレットの登録
+
+以下のコマンドでKey Vaultを作成します。
+`infra/keyvault.bicep` は、`main.bicep` が参照する既存 Key Vault を先に用意するためのテンプレートです。
+証明書 PEM の secret は別途 Key Vault に登録し、その `SecretUri` を `infra/main.bicep` の `oboClientCertificateSecretUri` に設定します。
+
+```
+# リソースグループ作成
+az group create \
+  --name <ResourceGroupName> \
+  -l <RegionName>
+
+# Key Vault 作成
+cd azure/
+az deployment group create \
+  --resource-group <ResourceGroupName> \
+  --template-file infra/keyvault.bicep \
+```
+
+作成後、Key ValutにDownstrema API用のクライアントシークレットを登録します。
+![](/docs/keyvault-create-secret.png)
+
+`param.bicepparam` の `oboClientCertificateSecretUri` に作成したシークレットのURIを設定します。
+
+### リソースデプロイ
+
 ```
 # リソースグループ作成
 az group create \
@@ -5,7 +37,6 @@ az group create \
   -l <RegionName>
 
 # リソース作成
-cd azure/
 az deployment group create \
   --resource-group <ResourceGroupName> \
   --template-file infra/main.bicep \
@@ -25,18 +56,9 @@ Function App は証明書 PEM を app setting に展開せず、managed identity
 公開証明書は、OBO に使うアプリ登録へ事前に登録しておいてください。
 
 参考:
+
 - https://learn.microsoft.com/en-us/azure/app-service/configure-authentication-oauth-tokens
 - https://learn.microsoft.com/en-gb/azure/app-service/overview-authentication-authorization
-
-デプロイ前に構成の変更をレビューしたい場合は以下のDry-run用コマンドを実行してください。
-
-```
-cd azure/
-az deployment group what-if \
-  --resource-group <ResourceGroupName> \
-  --template-file infra/main.bicep \
-  -p infra/param.bicepparam
-```
 
 ### Azure Functionsのデプロイ
 
