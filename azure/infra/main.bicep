@@ -8,9 +8,8 @@ param runtime string = 'node'
 @description('Runtime version')
 param runtimeVersion string = '20'
 
-@description('Client secret of the API app registration used by the Function app for OBO token exchange.')
-@secure()
-param oboClientSecret string
+@description('SecretUri of the existing Key Vault secret that contains the OBO client certificate PEM.')
+param oboClientCertificateSecretUri string
 
 @description('Client secret of the Easy Auth app registration used by App Service authentication to acquire provider tokens.')
 @secure()
@@ -18,6 +17,7 @@ param easyAuthClientSecret string = ''
 
 var resourceToken = take(toLower(uniqueString(resourceGroup().id, location)), 6)
 var ownerObjectId = deployer().objectId
+var tenantId = subscription().tenantId
 
 // For downstream API
 var apiApplicationUniqueName = 'api-${resourceToken}'
@@ -144,9 +144,6 @@ module storageAccount './modules/storage-account.bicep' = {
   }
 }
 
-// Function App with Easy Auth
-var tenantId = subscription().tenantId
-
 module functionApp './modules/function-app.bicep' = {
   name: 'functionApp'
   params: {
@@ -159,7 +156,31 @@ module functionApp './modules/function-app.bicep' = {
     easyAuthClientSecret: easyAuthClientSecret
     oboClientId: apiAppRegistration.appId
     audience: audience
-    oboClientSecret: oboClientSecret
+    oboClientCertificateSecretUri: oboClientCertificateSecretUri
     storageConnectionString: storageAccount.outputs.storageConnectionString
+  }
+}
+
+var oboClientCertificateKeyVaultName = split(split(oboClientCertificateSecretUri, '://')[1], '.')[0]
+
+resource existingKeyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
+  name: oboClientCertificateKeyVaultName
+}
+
+resource keyVaultFunctionAccessPolicy 'Microsoft.KeyVault/vaults/accessPolicies@2023-07-01' = {
+  parent: existingKeyVault
+  name: 'add'
+  properties: {
+    accessPolicies: [
+      {
+        tenantId: tenantId
+        objectId: functionApp.outputs.functionPrincipalId
+        permissions: {
+          secrets: [
+            'get'
+          ]
+        }
+      }
+    ]
   }
 }

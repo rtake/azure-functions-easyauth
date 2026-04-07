@@ -1,4 +1,4 @@
 using './main.bicep'
 
 param easyAuthClientSecret = ''
-param oboClientSecret = ''
+param oboClientCertificateSecretUri = 'https://<existing-key-vault-name>.vault.azure.net/secrets/<secret-name>/<version>'

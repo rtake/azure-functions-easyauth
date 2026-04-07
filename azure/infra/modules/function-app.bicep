@@ -8,8 +8,7 @@ param easyAuthClientId string
 param easyAuthClientSecret string
 param oboClientId string
 param audience string
-@secure()
-param oboClientSecret string
+param oboClientCertificateSecretUri string
 param storageConnectionString string
 
 var planName = 'plan-${resourceToken}'
@@ -63,7 +62,7 @@ resource functionApp 'Microsoft.Web/sites@2024-04-01' = {
       APPLICATIONINSIGHTS_CONNECTION_STRING: appInsights.properties.ConnectionString
       OBO_TENANT_ID: tenantId
       OBO_CLIENT_ID: oboClientId
-      OBO_CLIENT_SECRET: oboClientSecret
+      OBO_CLIENT_CERTIFICATE_SECRET_URI: oboClientCertificateSecretUri
       GRAPH_SCOPE: 'https://graph.microsoft.com/User.Read'
       GRAPH_ENDPOINT: 'https://graph.microsoft.com/v1.0/me'
       WEBSITE_RUN_FROM_PACKAGE: '1'

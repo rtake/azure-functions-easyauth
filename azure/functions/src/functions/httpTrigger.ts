@@ -4,6 +4,18 @@ import {
   HttpResponseInit,
   InvocationContext,
 } from "@azure/functions";
+import {
+  ManagedIdentityCredential,
+  OnBehalfOfCredential,
+} from "@azure/identity";
+import { createHash } from "node:crypto";
+import { writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+/* =========================
+ * Types
+ * ========================= */
 
 type GraphMeResponse = {
   id: string;
@@ -15,28 +27,61 @@ type GraphMeResponse = {
 type EasyAuthIdentity = {
   access_token?: string;
   id_token?: string;
-  provider_name?: string;
-  user_claims?: Array<{
-    typ?: string;
-    val?: string;
-  }>;
 };
 
-function getRequiredSetting(name: string): string {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`Missing required app setting: ${name}`);
-  }
+/* =========================
+ * Config / Env
+ * ========================= */
 
-  return value;
+function getEnv(name: string): string {
+  const v = process.env[name];
+  if (!v) throw new Error(`Missing env: ${name}`);
+  return v;
 }
 
-function getUserAssertionFromHeaders(req: HttpRequest): string | undefined {
-  const authorization = req.headers.get("authorization");
-  if (authorization?.startsWith("Bearer ")) {
-    return authorization.slice("Bearer ".length).trim();
+function getOptionalEnv(name: string, fallback: string): string {
+  return process.env[name] ?? fallback;
+}
+
+/* =========================
+ * HTTP helpers
+ * ========================= */
+
+async function httpGetJson<T>(
+  url: string,
+  headers: Record<string, string>,
+): Promise<T> {
+  const res = await fetch(url, { headers });
+
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}: ${await res.text()}`);
   }
 
+  return (await res.json()) as T;
+}
+
+/* =========================
+ * Assertion Resolver
+ * ========================= */
+
+async function resolveUserAssertion(
+  req: HttpRequest,
+): Promise<string | undefined> {
+  return (
+    getBearerToken(req) ??
+    getEasyAuthHeader(req) ??
+    (await getEasyAuthCookie(req))
+  );
+}
+
+function getBearerToken(req: HttpRequest): string | undefined {
+  const auth = req.headers.get("authorization");
+  if (auth?.startsWith("Bearer ")) {
+    return auth.slice("Bearer ".length).trim();
+  }
+}
+
+function getEasyAuthHeader(req: HttpRequest): string | undefined {
   return (
     req.headers.get("x-ms-token-aad-access-token") ??
     req.headers.get("x-ms-token-aad-id-token") ??
@@ -44,159 +89,172 @@ function getUserAssertionFromHeaders(req: HttpRequest): string | undefined {
   );
 }
 
-async function getUserAssertionFromEasyAuth(
+async function getEasyAuthCookie(
   req: HttpRequest,
 ): Promise<string | undefined> {
-  const sessionCookie = req.headers.get("cookie");
+  const cookie = req.headers.get("cookie");
   const host = req.headers.get("host");
+
+  if (!cookie?.includes("AppServiceAuthSession=") || !host) return;
+
   const proto =
     req.headers.get("x-forwarded-proto") ??
     req.headers.get("x-appservice-proto") ??
     "https";
 
-  if (!sessionCookie?.includes("AppServiceAuthSession=") || !host) {
-    return undefined;
-  }
+  const identities = await httpGetJson<EasyAuthIdentity[]>(
+    `${proto}://${host}/.auth/me`,
+    { cookie },
+  );
 
-  const meResponse = await fetch(`${proto}://${host}/.auth/me`, {
-    headers: {
-      cookie: sessionCookie,
-    },
-  });
-
-  if (!meResponse.ok) {
-    throw new Error(
-      `Easy Auth /.auth/me call failed (${meResponse.status}): ${await meResponse.text()}`,
-    );
-  }
-
-  const identities = (await meResponse.json()) as EasyAuthIdentity[];
-  for (const identity of identities) {
-    if (identity.access_token) {
-      return identity.access_token;
-    }
-
-    if (identity.id_token) {
-      return identity.id_token;
-    }
-  }
-
-  return undefined;
+  return (
+    identities.find((i) => i.access_token)?.access_token ??
+    identities.find((i) => i.id_token)?.id_token
+  );
 }
 
-async function exchangeTokenOnBehalfOf(userAssertion: string): Promise<string> {
-  const tenantId = getRequiredSetting("OBO_TENANT_ID");
-  const clientId = getRequiredSetting("OBO_CLIENT_ID");
-  const clientSecret = getRequiredSetting("OBO_CLIENT_SECRET");
-  const scope =
-    process.env.GRAPH_SCOPE ?? "https://graph.microsoft.com/User.Read";
-  const authorityHost =
-    process.env.OBO_AUTHORITY_HOST ?? "https://login.microsoftonline.com";
+/* =========================
+ * Certificate (Key Vault)
+ * ========================= */
 
-  const form = new URLSearchParams({
-    client_id: clientId,
-    client_secret: clientSecret,
-    grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-    requested_token_use: "on_behalf_of",
-    scope,
-    assertion: userAssertion,
-  });
+const miCredential = new ManagedIdentityCredential();
 
-  const tokenResponse = await fetch(
-    `${authorityHost}/${tenantId}/oauth2/v2.0/token`,
+let certificateCache: Promise<string>;
+
+function getCertificatePath(): Promise<string> {
+  certificateCache ??= loadCertificate();
+  return certificateCache;
+}
+
+async function loadCertificate(): Promise<string> {
+  const secretUri = getEnv("OBO_CLIENT_CERTIFICATE_SECRET_URI");
+
+  const token = await miCredential.getToken("https://vault.azure.net/.default");
+
+  if (!token?.token) {
+    throw new Error("Failed to acquire MI token");
+  }
+
+  const separator = secretUri.includes("?") ? "&" : "?";
+
+  const secret = await httpGetJson<{ value?: string }>(
+    `${secretUri}${separator}api-version=7.4`,
     {
-      method: "POST",
-      headers: {
-        "content-type": "application/x-www-form-urlencoded",
-      },
-      body: form.toString(),
+      authorization: `Bearer ${token.token}`,
     },
   );
 
-  if (!tokenResponse.ok) {
-    const errorBody = await tokenResponse.text();
-    throw new Error(
-      `OBO token exchange failed (${tokenResponse.status}): ${errorBody}`,
-    );
+  if (!secret.value) {
+    throw new Error("KeyVault secret missing value");
   }
 
-  const tokenJson = (await tokenResponse.json()) as { access_token?: string };
-  if (!tokenJson.access_token) {
-    throw new Error(
-      "OBO token exchange succeeded but access_token was missing",
-    );
-  }
+  const hash = createHash("sha256").update(secret.value).digest("hex");
 
-  return tokenJson.access_token;
-}
+  const path = join(tmpdir(), `obo-cert-${hash}.pem`);
 
-async function fetchGraphMe(accessToken: string): Promise<GraphMeResponse> {
-  const graphEndpoint =
-    process.env.GRAPH_ENDPOINT ?? "https://graph.microsoft.com/v1.0/me";
-
-  const graphResponse = await fetch(graphEndpoint, {
-    headers: {
-      authorization: `Bearer ${accessToken}`,
-    },
+  await writeFile(path, secret.value, {
+    encoding: "utf8",
+    mode: 0o600,
   });
 
-  if (!graphResponse.ok) {
-    const errorBody = await graphResponse.text();
-    throw new Error(
-      `Microsoft Graph call failed (${graphResponse.status}): ${errorBody}`,
-    );
+  return path;
+}
+
+/* =========================
+ * OBO
+ * ========================= */
+
+async function exchangeTokenOnBehalfOf(userAssertion: string): Promise<string> {
+  const credential = new OnBehalfOfCredential({
+    tenantId: getEnv("OBO_TENANT_ID"),
+    clientId: getEnv("OBO_CLIENT_ID"),
+    certificatePath: await getCertificatePath(),
+    userAssertionToken: userAssertion,
+  });
+
+  const token = await credential.getToken(
+    getOptionalEnv("GRAPH_SCOPE", "https://graph.microsoft.com/User.Read"),
+  );
+
+  if (!token?.token) {
+    throw new Error("OBO token missing");
   }
 
-  return (await graphResponse.json()) as GraphMeResponse;
+  return token.token;
 }
+
+/* =========================
+ * Graph
+ * ========================= */
+
+async function fetchGraphMe(accessToken: string): Promise<GraphMeResponse> {
+  return httpGetJson<GraphMeResponse>(
+    getOptionalEnv("GRAPH_ENDPOINT", "https://graph.microsoft.com/v1.0/me"),
+    {
+      authorization: `Bearer ${accessToken}`,
+    },
+  );
+}
+
+/* =========================
+ * Response helpers
+ * ========================= */
+
+function ok(body: unknown): HttpResponseInit {
+  return { status: 200, jsonBody: body };
+}
+
+function unauthorized(): HttpResponseInit {
+  return {
+    status: 401,
+    jsonBody: {
+      error: "Bearer / EasyAuth token / AppServiceAuthSession required",
+    },
+  };
+}
+
+function fail(error: unknown): HttpResponseInit {
+  const message = error instanceof Error ? error.message : "Unexpected error";
+
+  return {
+    status: 500,
+    jsonBody: { error: message },
+  };
+}
+
+/* =========================
+ * Handler (薄くする)
+ * ========================= */
 
 async function httpTrigger(
   req: HttpRequest,
   context: InvocationContext,
 ): Promise<HttpResponseInit> {
   try {
-    context.log("req.headers", req.headers);
+    const assertion = await resolveUserAssertion(req);
+    if (!assertion) return unauthorized();
 
-    const userAssertion =
-      getUserAssertionFromHeaders(req) ??
-      (await getUserAssertionFromEasyAuth(req));
-    if (!userAssertion) {
-      return {
-        status: 401,
-        jsonBody: {
-          error:
-            "Authorization bearer token, Easy Auth token header, or AppServiceAuthSession-backed /.auth/me token is required.",
-        },
-      };
-    }
+    const token = await exchangeTokenOnBehalfOf(assertion);
+    const me = await fetchGraphMe(token);
 
-    const graphAccessToken = await exchangeTokenOnBehalfOf(userAssertion);
-    const me = await fetchGraphMe(graphAccessToken);
-
-    context.log("OBO Graph call succeeded", {
+    context.log("success", {
       userId: me.id,
       upn: me.userPrincipalName,
     });
 
-    return {
-      status: 200,
-      jsonBody: {
-        message: "Microsoft Graph call succeeded via OBO.",
-        me,
-      },
-    };
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Unexpected error occurred";
-    context.error("OBO Graph call failed", { message });
-    return {
-      status: 500,
-      jsonBody: {
-        error: message,
-      },
-    };
+    return ok({
+      message: "Graph call succeeded via OBO",
+      me,
+    });
+  } catch (e) {
+    context.error("failed", e);
+    return fail(e);
   }
 }
+
+/* =========================
+ * Entry
+ * ========================= */
 
 app.http("httpTrigger", {
   methods: ["GET", "POST"],

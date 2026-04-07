@@ -18,8 +18,11 @@ Easy Auth から `/.auth/me` でアクセストークンを取得したい場合
 
 - `easyAuthClientSecret`
   Easy Auth が ID プロバイダーからユーザートークンを取得し、token store (`/.auth/me`) に保持するために使います
-- `oboClientSecret`
-  Function App が OBO で Microsoft Graph 用アクセストークンを交換するために使います
+- `oboClientCertificateSecretUri`
+  既存 Key Vault secret の `SecretUri` です
+
+Function App は証明書 PEM を app setting に展開せず、managed identity で Key Vault の secret を実行時に直接取得して OBO に使います。
+公開証明書は、OBO に使うアプリ登録へ事前に登録しておいてください。
 
 参考:
 - https://learn.microsoft.com/en-us/azure/app-service/configure-authentication-oauth-tokens
