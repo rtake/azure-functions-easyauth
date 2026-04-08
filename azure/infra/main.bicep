@@ -148,6 +148,7 @@ module storageAccount './modules/storage-account.bicep' = {
 }
 
 var spaStaticWebsiteUrl = storageAccount.outputs.staticWebsiteUrl
+// Remove trailing slash if exists for consistent CORS origin configuration
 var spaStaticWebsiteOrigin = endsWith(spaStaticWebsiteUrl, '/')
   ? substring(spaStaticWebsiteUrl, 0, max(length(spaStaticWebsiteUrl) - 1, 0))
   : spaStaticWebsiteUrl
@@ -167,7 +168,7 @@ module functionApp './modules/function-app.bicep' = {
     oboClientCertificateSecretUri: oboClientCertificateSecretUri
     storageConnectionString: storageAccount.outputs.storageConnectionString
     allowedOrigins: [
-      spaStaticWebsiteOrigin
+      spaStaticWebsiteOrigin // CORS for API calls from the SPA static website
     ]
     allowedExternalRedirectUrls: [
       spaStaticWebsiteOrigin
