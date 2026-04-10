@@ -14,10 +14,6 @@ param oboClientCertificateSecretUri string
 @description('Resource group name that contains the existing Key Vault. Defaults to the current deployment resource group.')
 param oboClientCertificateKeyVaultResourceGroupName string = resourceGroup().name
 
-@description('Client secret of the Easy Auth app registration used by App Service authentication to acquire provider tokens.')
-@secure()
-param easyAuthClientSecret string = ''
-
 var resourceToken = take(toLower(uniqueString(resourceGroup().id, location)), 6)
 var ownerObjectId = deployer().objectId
 var tenantId = subscription().tenantId
@@ -126,6 +122,15 @@ resource easyAuthAppRegistration 'Microsoft.Graph/applications@v1.0' = {
       ]
     }
   ]
+  resource clientAppFic 'federatedIdentityCredentials@v1.0' = {
+    name: '${easyAuthAppRegistration.uniqueName}/miAsFic'
+    audiences: [
+      'api://AzureADTokenExchange'
+    ]
+    subject: functionApp.outputs.functionPrincipalId
+    issuer: '${environment().authentication.loginEndpoint}${tenant().tenantId}/v2.0'
+    // issuer: 'https://login.microsoftonline.com/${tenantId}/v2.0'
+  }
 }
 
 resource easyAuthServicePrincipal 'Microsoft.Graph/servicePrincipals@v1.0' = {
@@ -162,7 +167,6 @@ module functionApp './modules/function-app.bicep' = {
     runtimeVersion: runtimeVersion
     tenantId: tenantId
     easyAuthClientId: easyAuthAppRegistration.appId
-    easyAuthClientSecret: easyAuthClientSecret
     oboClientId: apiAppRegistration.appId
     audience: audience
     oboClientCertificateSecretUri: oboClientCertificateSecretUri

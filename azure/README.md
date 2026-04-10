@@ -50,7 +50,6 @@ az ad app credential reset \
 
 | 変数名                                          | 概要                                                        |
 | ----------------------------------------------- | ----------------------------------------------------------- |
-| `easyAuthClientSecret`                          | Easy Auth用のアプリケーションのクライアントシークレット     |
 | `oboClientCertificateSecretUri`                 | OBO用証明書を保存したKey Vault secretのSecretUri            |
 | `oboClientCertificateKeyVaultResourceGroupName` | OBO用証明書を保存したKey Vault が存在するリソースグループ名 |
 
@@ -67,13 +66,11 @@ az deployment group create \
   -p infra/param.bicepparam
 ```
 
-#### Easy Auth用アプリ登録のシークレットを生成する
+Easy Auth用アプリ登録への認証はマネージドIDで行います [Easily add login to your Azure app with Bicep](https://techcommunity.microsoft.com/blog/azuredevcommunityblog/easily-add-login-to-your-azure-app-with-bicep/4386493)
 
-(TBD) Easy Auth用のシークレットはポータルから設定すれば環境変数にも設定してくれて楽そう
+([Microsoft Learn](https://learn.microsoft.com/ja-jp/azure/app-service/configure-authentication-oauth-tokens)には下記のような記載がありましたが、マネージドIDでの認証でもトークンストアが利用可能になったようです(プレビュー))
 
-この構成では、ブラウザにはトークンを持たせず、Easy Authが保持したトークンをFunctionから `/.auth/me` 経由で取得してOBOに使います。
-
-Easy Authから `/.auth/me` でアクセストークンを取得する場合は、Easy Auth用アプリ登録のクライアントシークレットをFunctionsに設定する必要があるため、事前に手動でアプリ登録を実行します。ここで生成したシークレットを、リソースデプロイの際にパラメータ (`easyAuthClientSecret`) としてBicepに渡します (https://learn.microsoft.com/ja-jp/azure/app-service/configure-authentication-oauth-tokens)
+> アクセス トークンはプロバイダー リソースにアクセスするためのものであるため、クライアント シークレットを使用してプロバイダーを構成した場合にのみ存在します。
 
 ### アプリケーションのデプロイ
 
