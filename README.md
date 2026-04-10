@@ -1,51 +1,41 @@
-## 背景・目的
+# azure-easyauth-oauth2-proxy
 
-### SPAで認証・認可機能を実装する際のセキュリティリスク
+OIDCやOAuth 2.0でSPAに認証・認可機能を実装する場合には、バックエンドサーバの導入によってセキュリティを高めることができる一方、構成や実装が複雑になるというトレードオフがあります。
 
-- ブラウザのストレージ(localStorageやsessionStorage)に保存したデータはXSSで窃取される可能性がある。よって、OIDCやOAuth 2.0の認証・認可フローの中で発行されるトークンをブラウザに保存することにはセキュリティ上のリスクがある
-- SPAでOIDC・OAuth 2.0に基づく認証機能を実装する場合、認証セッションを保持するためにブラウザのストレージにトークンを保存することになるが、上述したセキュリティリスクがある
+このリポジトリでは、複雑さを軽減しつつセキュリティを確保するために、Azureのマネージドサービスを利用することで、認証セッション管理機能を簡便に実装する方法を提供します。
 
-### SPAのセキュアなデザインパターン
+以下の要件・前提を満たす構成について検討しました。
 
-- バックエンドサーバがSPAの代わりにトークンを保持し、セッションIDを入れたCookieをSPAに送る、という方式が取られることがある ([BFFパターン](https://auth0.com/blog/jp-the-backend-for-frontend-pattern-bff/))。
-- SPAがバックエンドサーバに対してリクエストを送信するときに、ブラウザに保持しているCookieを一緒に送信することで、バックエンドでセッションIDとトークンを突き合わせ、認証状態を検証することが可能になる
-- SPAに送られたCookieはブラウザに保持されるが、CookieはXSS耐性があるためトークンに比べてリスクが小さい
+- SPAで構築したフロントエンドと、Web APIを提供するバックエンドサーバからなるシステムを前提とする(以下、認証機能を実装するサービスの後段に配置するAPIをDownstream APIと呼びます)
+- 認証済ユーザーだけがDownstream APIを実行できること
+- トークンはサーバで管理し、Cookieベースで認証セッションを管理できること(SPAにトークンを置かないこと)
+- 認証セッション管理はDownstream APIとできるだけ分離したサービスとして管理できること(任意のバックエンドサーバと統合できるようにするため)
 
-### このリポジトリの目的
+## アーキテクチャ概要
 
-- このように、OIDC・OAuth 2.0による認証・認可機能を実装するSPAではバックエンドサーバの導入によってセキュリティを高めることができるが、その場合には構成や実装が複雑になるというトレードオフがある
-- そこで、複雑さを軽減しつつセキュリティを確保する手段として、Azureのマネージドサービスを使い、認証セッション管理機能を簡便に実装する方法について調査し、ソースコードおよびIaCとして提供する
+本システムは、Azure Functionsが認証・認可のプロキシとして中心的な役割を果たす構成となっています。
 
-## 要件・前提
+![](/docs/concept.drawio.png)
 
-以下の要件・前提を満たす構成について調査する。
+### 認証
 
-- SPAで構築したフロントエンドと、Web APIを提供するバックエンドサーバからなるシステムを前提とする
-- 認証済ユーザーだけが後段のAPIを実行できること
-- トークンではなくCookieベースで認証セッションを管理できること
-- 認証セッション管理はバックエンドサーバと分離したサービスとして管理できること(任意のバックエンドサーバと統合できるようにするため)
+ユーザーがSPAでサインインを要求すると、Functionsが認証処理を実行します。認証にはAzure FunctionsとApp Serviceで提供されている組み込みの認証・認可機能である**Easy Auth**を利用しています。(参考: [Azure App Service および Azure Functions での認証と承認](https://learn.microsoft.com/ja-jp/azure/app-service/overview-authentication-authorization))
 
-## ソリューション概要
-
-- Azure App ServiceとAzure Functionsでは組み込みの認証・認可(**Easy Auth**)が提供されており、これを有効化することで、OIDCフローにおけるIDプロバイダーとのプロセスや認可の処理、トークンの管理などを簡略化できる。そこで、**Easy Authを有効化したAzure Functionsを認証・認可プロキシとして使う構成**とする
-- 一方で、Easy Authによって認証済みセッションを保持できても、それだけでは下流のAPIを「認証済みユーザーの代理」として呼び出すことはできない。下流のAPIに対しては、そのAPI向けに発行されたアクセストークンが別途必要となる
-- よって、Easy Authを有効化したAzure Functionsで**OBOフローに基づくトークン交換**を実施し、Cookieベースの認証セッション管理を維持しつつ、認証済みユーザーの代理として下流APIを呼び出す構成とする
-
-以下、ソリューションを構成する技術要素についての詳細について記載する。
-
-### Easy Auth
-
-- Easy Authを有効化すると、App Service/FunctionsをホストするVMの入り口に認証・認可を担うミドルウェアが起動する([Azure App Service および Azure Functions での認証と承認](https://learn.microsoft.com/ja-jp/azure/app-service/overview-authentication-authorization))
-- ミドルウェアによって取得されたトークンは[トークン ストア](https://learn.microsoft.com/ja-jp/azure/app-service/overview-authentication-authorization#token-store)に格納され、トークンの取得・保存・更新などの実装負担を軽減できる
+Easy Authを有効化すると、専用のミドルウェアがIDプロバイダーと連携してトークンを取得し、[トークン ストア](https://learn.microsoft.com/ja-jp/azure/app-service/overview-authentication-authorization#token-store)(組み込みのローカルファイルストレージ)に保存します。また、ブラウザに対してはトークンに紐づくCookieを発行することで、認証セッションを管理します。
 
 ![](https://learn.microsoft.com/ja-jp/azure/app-service/media/app-service-authentication-overview/architecture.png#lightbox)
 
-### On-Behalf-Ofフロー
+### 委任アクセス
 
-- Entra IDで提供されている**On-Behalf-Of(OBO)フロー**では、バックエンドサーバが、ユーザーから受け取ったアクセストークンを「ユーザーの代理としての証明」として使い、下流のAPI向けの新しいアクセストークンを取得できる ([]())
-- これにより、下流APIは「この呼び出しは、認証済みユーザーの代理として実行されている」と判断できる。つまり、誰の権限で実行された呼び出しかを扱いやすい
+SPAからのAPI呼び出しもFunctionsが代理で実行しますが、そのためにはFunctionsでDownstream API用のアクセストークンを取得する必要があります。
 
-OBOフローにおける実際の処理は以下のようになる。
+Entra IDでは、アプリケーションがユーザーの代理としてDownstream APIを呼び出すための仕組みである[On-Behalf-Of (OBO) フロー](https://learn.microsoft.com/ja-jp/entra/identity-platform/v2-oauth2-on-behalf-of-flow)が提供されています。OBOフローを利用することで、ユーザーから受け取ったアクセストークンをユーザーの代理としての証明として使い、Downstream API向けの新しいアクセストークンを取得することができます。
+
+そこで、FunctionsでOBOフローに基づくトークン交換を実施し、Cookieベースの認証セッション管理を維持しつつ、認証済みユーザーの代理として下流APIを呼び出す構成としました。
+
+(\*認証済・未認証を単に区別するだけであれば、FunctionsのマネージドIDに対してアクセス許可を設定するだけで十分です。ただし、その場合はDownstream APIでユーザーの情報を取得することは難しくなります)
+
+#### OBOフローの処理詳細
 
 1. アプリケーション(今回の構成ではSPA)がバックエンド(Easy Authを有効化したAzure Functions)に対してリクエストを送る。このとき、ブラウザは保持しているCookie(Easy Authで発行されたもの; `AppServiceAuthSession`)を自動送信する
 2. バックエンドはCookieに対応するセッションからユーザー由来のトークンを取得し、そのトークンを使って、Entra IDに対し下流API用のアクセストークンを要求する

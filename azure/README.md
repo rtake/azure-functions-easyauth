@@ -28,9 +28,7 @@ Azure FunctionsでDownstream APIのアクセストークンを取得するには
 
 OBOフローの実装には [@azure/msal-nodeのacquireTokenOnBehalfOf](https://learn.microsoft.com/ja-jp/javascript/api/@azure/msal-node/confidentialclientapplication?view=msal-js-latest#@azure-msal-node-confidentialclientapplication-acquiretokenonbehalfof) を使用しています。
 
-### アプリケーションのデプロイ
-
-#### Azure Functions
+### Azure Functionsのデプロイ
 
 ```bash
 cd azure/functions
@@ -39,7 +37,7 @@ npm run build # ビルド
 func azure functionapp publish <FunctionAppName> # デプロイ
 ```
 
-#### SPA
+### SPAのデプロイ
 
 `az deployment` 実行後に出力される `functionAppUrl` と `spaStorageName` を使ってビルド済みファイルを配置します。
 
