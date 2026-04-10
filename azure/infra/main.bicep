@@ -12,138 +12,40 @@ var resourceToken = take(toLower(uniqueString(resourceGroup().id, location)), 6)
 var ownerObjectId = deployer().objectId
 var tenantId = subscription().tenantId
 
-// For downstream API
-var apiApplicationUniqueName = 'api-${resourceToken}'
-var apiApplicationDisplayName = 'API ${resourceToken}'
-var userImpersonationScopeId = guid(apiApplicationUniqueName, 'user_impersonation')
-var audience = 'api://${apiApplicationUniqueName}'
+// Function AppがEntra IDに対してトークン交換や認証を行うためのアイデンティティ
+resource functionAppIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
+  name: 'uami-func-${resourceToken}'
+  location: location
+}
 
-var microsoftGraphAppId = '00000003-0000-0000-c000-000000000000'
-var microsoftGraphUserReadScopeId = 'e1fe6dd8-ba31-4d61-89e7-88639da4683d'
-
-resource apiAppRegistration 'Microsoft.Graph/applications@v1.0' = {
-  uniqueName: apiApplicationUniqueName
-  displayName: apiApplicationDisplayName
-  signInAudience: 'AzureADMyOrg'
-  identifierUris: [
-    audience
-  ]
-  api: {
-    requestedAccessTokenVersion: 2
-    oauth2PermissionScopes: [
-      {
-        id: userImpersonationScopeId
-        adminConsentDisplayName: 'Access ${apiApplicationDisplayName}'
-        adminConsentDescription: 'Allows the application to access ${apiApplicationDisplayName} on behalf of the signed-in user.'
-        userConsentDisplayName: 'Access ${apiApplicationDisplayName}'
-        userConsentDescription: 'Allows the application to access ${apiApplicationDisplayName} on your behalf.'
-        isEnabled: true
-        type: 'User'
-        value: 'user_impersonation'
-      }
-    ]
-  }
-  requiredResourceAccess: [
-    {
-      resourceAppId: microsoftGraphAppId
-      resourceAccess: [
-        {
-          id: microsoftGraphUserReadScopeId
-          type: 'Scope'
-        }
-      ]
-    }
-  ]
-  owners: {
-    relationshipSemantics: 'append'
-    relationships: empty(ownerObjectId)
-      ? []
-      : [
-          ownerObjectId
-        ]
-  }
-  resource clientAppFic 'federatedIdentityCredentials@v1.0' = {
-    name: '${apiAppRegistration.uniqueName}/miAsFicForObo'
-    audiences: [
-      'api://AzureADTokenExchange'
-    ]
-    subject: functionApp.outputs.functionPrincipalId
-    issuer: '${environment().authentication.loginEndpoint}${tenant().tenantId}/v2.0'
-    // issuer: 'https://login.microsoftonline.com/${tenantId}/v2.0'
+// APIアプリケーション (Entra IDアプリ登録)
+module apiApp './modules/api-app-registration.bicep' = {
+  name: 'apiAppRegistration'
+  params: {
+    resourceToken: resourceToken
+    ownerObjectId: ownerObjectId
+    tenantId: tenantId
+    functionAppIdentityId: functionAppIdentity.id
   }
 }
 
-resource apiServicePrincipal 'Microsoft.Graph/servicePrincipals@v1.0' = {
-  appId: apiAppRegistration.appId
-}
-
-resource microsoftGraphServicePrincipal 'Microsoft.Graph/servicePrincipals@v1.0' existing = {
-  appId: microsoftGraphAppId
-}
-
-resource apiToMicrosoftGraphAdminConsent 'Microsoft.Graph/oauth2PermissionGrants@v1.0' = {
-  clientId: apiServicePrincipal.id
-  consentType: 'AllPrincipals'
-  resourceId: microsoftGraphServicePrincipal.id
-  scope: 'User.Read'
-}
-
-// For Easy Auth on the Function app
-var easyAuthApplicationUniqueName = 'web-${resourceToken}'
-var easyAuthApplicationDisplayName = 'Web ${resourceToken}'
-var functionAppAuthCallbackUrl = 'https://func-${resourceToken}.azurewebsites.net/.auth/login/aad/callback'
-
-resource easyAuthAppRegistration 'Microsoft.Graph/applications@v1.0' = {
-  uniqueName: easyAuthApplicationUniqueName
-  displayName: easyAuthApplicationDisplayName
-  signInAudience: 'AzureADMyOrg'
-  web: {
-    redirectUris: [
-      functionAppAuthCallbackUrl
-    ]
-    implicitGrantSettings: {
-      enableIdTokenIssuance: true
-      enableAccessTokenIssuance: false
-    }
+// EasyAuthのクライアントアプリケーション (Entra IDアプリ登録)
+module easyAuthApp './modules/easyauth-app-registration.bicep' = {
+  name: 'easyAuthAppRegistration'
+  params: {
+    resourceToken: resourceToken
+    ownerObjectId: ownerObjectId
+    tenantId: tenantId
+    functionAppPrincipalId: functionAppIdentity.id
+    apiAppId: apiApp.outputs.appId
+    userImpersonationScopeId: apiApp.outputs.userImpersonationScopeId
   }
-  owners: {
-    relationshipSemantics: 'append'
-    relationships: empty(ownerObjectId)
-      ? []
-      : [
-          ownerObjectId
-        ]
-  }
-  requiredResourceAccess: [
-    {
-      resourceAppId: apiAppRegistration.appId
-      resourceAccess: [
-        {
-          id: userImpersonationScopeId
-          type: 'Scope'
-        }
-      ]
-    }
-  ]
-  resource clientAppFic 'federatedIdentityCredentials@v1.0' = {
-    name: '${easyAuthAppRegistration.uniqueName}/miAsFic'
-    audiences: [
-      'api://AzureADTokenExchange'
-    ]
-    subject: functionApp.outputs.functionPrincipalId
-    issuer: '${environment().authentication.loginEndpoint}${tenant().tenantId}/v2.0'
-    // issuer: 'https://login.microsoftonline.com/${tenantId}/v2.0'
-  }
-}
-
-resource easyAuthServicePrincipal 'Microsoft.Graph/servicePrincipals@v1.0' = {
-  appId: easyAuthAppRegistration.appId
 }
 
 resource easyAuthAdminConsent 'Microsoft.Graph/oauth2PermissionGrants@v1.0' = {
-  clientId: easyAuthServicePrincipal.id
+  clientId: easyAuthApp.outputs.servicePrincipalId
   consentType: 'AllPrincipals'
-  resourceId: apiServicePrincipal.id
+  resourceId: apiApp.outputs.servicePrincipalId
   scope: 'user_impersonation'
 }
 
@@ -169,10 +71,11 @@ module functionApp './modules/function-app.bicep' = {
     runtime: runtime
     runtimeVersion: runtimeVersion
     tenantId: tenantId
-    easyAuthClientId: easyAuthAppRegistration.appId
-    oboClientId: apiAppRegistration.appId
-    audience: audience
+    easyAuthClientId: easyAuthApp.outputs.appId
+    oboClientId: apiApp.outputs.appId
+    audience: apiApp.outputs.audience
     storageConnectionString: storageAccount.outputs.storageConnectionString
+    identityId: functionAppIdentity.id
     allowedOrigins: [
       spaStaticWebsiteOrigin // CORS for API calls from the SPA static website
     ]
@@ -185,6 +88,4 @@ module functionApp './modules/function-app.bicep' = {
 
 output spaStaticWebsiteUrl string = spaStaticWebsiteUrl
 output spaStorageName string = storageAccount.outputs.storageName
-output functionAppName string = functionApp.outputs.functionName
-output functionAppUrl string = 'https://${functionApp.outputs.functionDefaultHostname}'
-output easyAuthLoginBaseUrl string = 'https://${functionApp.outputs.functionDefaultHostname}/.auth/login/aad'
+output functionAppUrl string = 'https://${functionApp.name}.azurewebsites.net'

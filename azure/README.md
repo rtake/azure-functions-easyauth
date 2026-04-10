@@ -32,8 +32,6 @@ OBOフローの実装には [@azure/msal-nodeのacquireTokenOnBehalfOf](https://
 
 #### Azure Functions
 
-リソース作成後、Azure Functionsをビルドしデプロイしてください。
-
 ```bash
 cd azure/functions
 npm install
@@ -44,7 +42,6 @@ func azure functionapp publish <FunctionAppName> # デプロイ
 #### SPA
 
 `az deployment` 実行後に出力される `functionAppUrl` と `spaStorageName` を使ってビルド済みファイルを配置します。
-アップロード後、`spaStaticWebsiteUrl` へアクセスしてください。
 
 初回セットアップでは、`spa/.env.production.example` をコピーして `spa/.env.production` を作成し、Function App の URL を設定してください。
 
@@ -59,9 +56,8 @@ cd spa
 # .env.production を編集して VITE_API_BASE_URL を設定
 cp .env.production.example .env.production
 
-# ビルド
 npm install
-npm run build
+npm run build # ビルド
 
 # dist/ を $web コンテナへアップロード
 az storage blob upload-batch \
@@ -71,6 +67,9 @@ az storage blob upload-batch \
   --auth-mode login \
   --overwrite
 ```
+
+アップロード後、`spaStaticWebsiteUrl` でアプリケーションにアクセスできます。
+![](/docs/spa.png)
 
 ## 認証フロー
 
