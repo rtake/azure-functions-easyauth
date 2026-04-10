@@ -7,12 +7,17 @@ param easyAuthClientId string
 param oboClientId string
 param audience string
 param storageConnectionString string
+param identityId string
 param allowedOrigins array = []
 param allowedExternalRedirectUrls array = []
 
 var planName = 'plan-${resourceToken}'
 var functionName = 'func-${resourceToken}'
 var appInsightsName = 'appi-${resourceToken}'
+
+resource identity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' existing = {
+  name: last(split(identityId, '/'))
+}
 
 resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
   name: appInsightsName
@@ -34,11 +39,6 @@ resource plan 'Microsoft.Web/serverfarms@2024-04-01' = {
   properties: {
     reserved: true
   }
-}
-
-resource identity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
-  name: 'backend-app-identity'
-  location: location
 }
 
 resource functionApp 'Microsoft.Web/sites@2024-04-01' = {
@@ -118,7 +118,3 @@ resource auth 'Microsoft.Web/sites/config@2022-09-01' = {
     }
   }
 }
-
-output functionName string = functionApp.name
-output functionDefaultHostname string = functionApp.properties.defaultHostName
-output functionPrincipalId string = functionApp.identity.userAssignedIdentities[identity.id].principalId
