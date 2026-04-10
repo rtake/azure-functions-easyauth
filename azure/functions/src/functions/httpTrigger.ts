@@ -78,9 +78,8 @@ async function resolveUserAssertion(
   req: HttpRequest,
 ): Promise<string | undefined> {
   return (
-    getBearerToken(req) ??
-    getEasyAuthHeader(req) ??
-    (await getEasyAuthCookie(req))
+    // getBearerToken(req) ?? getEasyAuthHeader(req) ?? (await getEasyAuthCookie(req))
+    await getEasyAuthCookie(req)
   );
 }
 
@@ -167,7 +166,8 @@ async function getEasyAuthCookie(
  * Certificate (Key Vault)
  * ========================= */
 
-const miCredential = new ManagedIdentityCredential();
+const clinetId = getEnv("OVERRIDE_USE_MI_FIC_ASSERTION_CLIENTID");
+const miCredential = new ManagedIdentityCredential({ clientId: clinetId });
 
 let certificateCache: Promise<string>;
 
@@ -190,7 +190,9 @@ function normalizePemSecret(value: string): string {
   normalized = normalized.replace(/\r\n/g, "\n").replace(/\\n/g, "\n");
 
   if (!normalized.includes("-----BEGIN CERTIFICATE-----")) {
-    throw new Error("Key Vault secret does not contain a PEM certificate block");
+    throw new Error(
+      "Key Vault secret does not contain a PEM certificate block",
+    );
   }
 
   if (
@@ -198,7 +200,9 @@ function normalizePemSecret(value: string): string {
     !normalized.includes("-----BEGIN RSA PRIVATE KEY-----") &&
     !normalized.includes("-----BEGIN ENCRYPTED PRIVATE KEY-----")
   ) {
-    throw new Error("Key Vault secret does not contain a PEM private key block");
+    throw new Error(
+      "Key Vault secret does not contain a PEM private key block",
+    );
   }
 
   return normalized;

@@ -4,8 +4,6 @@ param runtime string
 param runtimeVersion string
 param tenantId string
 param easyAuthClientId string
-@secure()
-param easyAuthClientSecret string
 param oboClientId string
 param audience string
 param oboClientCertificateSecretUri string
@@ -39,12 +37,20 @@ resource plan 'Microsoft.Web/serverfarms@2024-04-01' = {
   }
 }
 
+resource identity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
+  name: 'backend-app-identity'
+  location: location
+}
+
 resource functionApp 'Microsoft.Web/sites@2024-04-01' = {
   name: functionName
   location: location
   kind: 'functionapp,linux'
   identity: {
-    type: 'SystemAssigned'
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${identity.id}': {}
+    }
   }
   properties: {
     serverFarmId: plan.id
@@ -72,7 +78,7 @@ resource functionApp 'Microsoft.Web/sites@2024-04-01' = {
       GRAPH_SCOPE: 'https://graph.microsoft.com/User.Read'
       GRAPH_ENDPOINT: 'https://graph.microsoft.com/v1.0/me'
       WEBSITE_RUN_FROM_PACKAGE: '1'
-      MICROSOFT_PROVIDER_AUTHENTICATION_SECRET: easyAuthClientSecret
+      OVERRIDE_USE_MI_FIC_ASSERTION_CLIENTID: identity.properties.clientId
     }
   }
 }
@@ -91,7 +97,7 @@ resource auth 'Microsoft.Web/sites/config@2022-09-01' = {
         registration: {
           clientId: easyAuthClientId
           openIdIssuer: '${environment().authentication.loginEndpoint}${tenantId}/v2.0'
-          clientSecretSettingName: 'MICROSOFT_PROVIDER_AUTHENTICATION_SECRET'
+          clientSecretSettingName: 'OVERRIDE_USE_MI_FIC_ASSERTION_CLIENTID'
         }
         login: {
           loginParameters: [
@@ -117,4 +123,4 @@ resource auth 'Microsoft.Web/sites/config@2022-09-01' = {
 
 output functionName string = functionApp.name
 output functionDefaultHostname string = functionApp.properties.defaultHostName
-output functionPrincipalId string = functionApp.identity.principalId
+output functionPrincipalId string = functionApp.identity.userAssignedIdentities[identity.id].principalId
