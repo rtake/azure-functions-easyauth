@@ -8,12 +8,6 @@ param runtime string = 'node'
 @description('Runtime version')
 param runtimeVersion string = '20'
 
-@description('SecretUri of the existing Key Vault secret that contains the OBO client certificate PEM.')
-param oboClientCertificateSecretUri string
-
-@description('Resource group name that contains the existing Key Vault. Defaults to the current deployment resource group.')
-param oboClientCertificateKeyVaultResourceGroupName string = resourceGroup().name
-
 var resourceToken = take(toLower(uniqueString(resourceGroup().id, location)), 6)
 var ownerObjectId = deployer().objectId
 var tenantId = subscription().tenantId
@@ -67,6 +61,15 @@ resource apiAppRegistration 'Microsoft.Graph/applications@v1.0' = {
       : [
           ownerObjectId
         ]
+  }
+  resource clientAppFic 'federatedIdentityCredentials@v1.0' = {
+    name: '${apiAppRegistration.uniqueName}/miAsFicForObo'
+    audiences: [
+      'api://AzureADTokenExchange'
+    ]
+    subject: functionApp.outputs.functionPrincipalId
+    issuer: '${environment().authentication.loginEndpoint}${tenant().tenantId}/v2.0'
+    // issuer: 'https://login.microsoftonline.com/${tenantId}/v2.0'
   }
 }
 
@@ -169,7 +172,6 @@ module functionApp './modules/function-app.bicep' = {
     easyAuthClientId: easyAuthAppRegistration.appId
     oboClientId: apiAppRegistration.appId
     audience: audience
-    oboClientCertificateSecretUri: oboClientCertificateSecretUri
     storageConnectionString: storageAccount.outputs.storageConnectionString
     allowedOrigins: [
       spaStaticWebsiteOrigin // CORS for API calls from the SPA static website
@@ -178,18 +180,6 @@ module functionApp './modules/function-app.bicep' = {
       spaStaticWebsiteOrigin
       spaStaticWebsiteUrl
     ]
-  }
-}
-
-var oboClientCertificateKeyVaultName = split(split(oboClientCertificateSecretUri, '://')[1], '.')[0]
-
-module keyVaultFunctionAccessPolicy './modules/keyvault-access-policy.bicep' = {
-  name: 'keyVaultFunctionAccessPolicy'
-  scope: resourceGroup(subscription().subscriptionId, oboClientCertificateKeyVaultResourceGroupName)
-  params: {
-    keyVaultName: oboClientCertificateKeyVaultName
-    tenantId: tenantId
-    objectId: functionApp.outputs.functionPrincipalId
   }
 }
 

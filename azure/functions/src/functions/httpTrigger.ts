@@ -8,6 +8,7 @@ import {
   ManagedIdentityCredential,
   OnBehalfOfCredential,
 } from "@azure/identity";
+import { ConfidentialClientApplication } from "@azure/msal-node";
 import { createHash } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -267,6 +268,36 @@ async function exchangeTokenOnBehalfOf(userAssertion: string): Promise<string> {
   return token.token;
 }
 
+async function exchangeTokenOnBehalfOfWithManagedIdentity(
+  userAssertion: string,
+): Promise<string> {
+  const confidentialClientApplication = new ConfidentialClientApplication({
+    auth: {
+      clientAssertion: async () => {
+        const token = await miCredential.getToken(
+          "api://AzureADTokenExchange/.default",
+        );
+        return token.token;
+      },
+      clientId: getEnv("OBO_CLIENT_ID"),
+      authority: `https://login.microsoftonline.com/${getEnv("OBO_TENANT_ID")}`,
+    },
+  });
+
+  const result = await confidentialClientApplication.acquireTokenOnBehalfOf({
+    oboAssertion: userAssertion,
+    scopes: [
+      getOptionalEnv("GRAPH_SCOPE", "https://graph.microsoft.com/User.Read"),
+    ],
+  });
+
+  if (!result?.accessToken) {
+    throw new Error("OBO token missing");
+  }
+
+  return result.accessToken;
+}
+
 /* =========================
  * Graph
  * ========================= */
@@ -319,7 +350,10 @@ async function httpTrigger(
     const assertion = await resolveUserAssertion(req);
     if (!assertion) return unauthorized(req);
 
-    const token = await exchangeTokenOnBehalfOf(assertion);
+    // const token = await exchangeTokenOnBehalfOf(assertion);
+    const token = await exchangeTokenOnBehalfOfWithManagedIdentity(assertion);
+    context.log("token: ", token);
+
     const me = await fetchGraphMe(token);
 
     context.log("success", {
