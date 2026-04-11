@@ -9,19 +9,6 @@ import { ConfidentialClientApplication } from "@azure/msal-node";
 import { GraphApiService } from "../graph/GraphApiService.js";
 import { GraphApiError } from "../graph/errors/GraphApiError.js";
 
-/* =========================
- * Types
- * ========================= */
-
-type EasyAuthIdentity = {
-  access_token?: string;
-  id_token?: string;
-};
-
-/* =========================
- * Config / Env
- * ========================= */
-
 function getEnv(name: string): string {
   const v = process.env[name];
   if (!v) throw new Error(`Missing env: ${name}`);
@@ -32,61 +19,37 @@ function getOptionalEnv(name: string, fallback: string): string {
   return process.env[name] ?? fallback;
 }
 
-/* =========================
- * HTTP helpers
- * ========================= */
-
-async function httpGetJson<T>(
-  url: string,
-  headers: Record<string, string>,
-): Promise<T> {
-  const res = await fetch(url, { headers });
-
-  if (!res.ok) {
-    throw new Error(`HTTP ${res.status}: ${await res.text()}`);
-  }
-
-  return (await res.json()) as T;
-}
-
-/* =========================
- * Assertion Resolver
- * ========================= */
-
-async function resolveUserAssertion(
-  req: HttpRequest,
-): Promise<string | undefined> {
-  return await getEasyAuthCookie(req);
-}
-
-function resolveRequestProto(req: HttpRequest): string {
-  return (
-    req.headers.get("x-forwarded-proto") ??
-    req.headers.get("x-appservice-proto") ??
-    safeParseUrl(req.url)?.protocol.replace(":", "") ??
-    "https"
-  );
-}
-
 function resolveRequestHost(req: HttpRequest): string | undefined {
   return (
     req.headers.get("x-forwarded-host") ??
     req.headers.get("x-original-host") ??
     req.headers.get("host") ??
-    safeParseUrl(req.url)?.host ??
+    new URL(req.url).host ??
     undefined
   );
 }
 
-function safeParseUrl(url: string): URL | undefined {
-  try {
-    return new URL(url);
-  } catch {
-    return undefined;
+async function fetchAccessTokenFromEasyAuth(
+  cookie: string,
+  host: string,
+): Promise<string | undefined> {
+  const url = `https://${host}/.auth/me`;
+  const res = await fetch(url, {
+    headers: {
+      cookie,
+    },
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch Easy Auth token: HTTP ${res.status}`);
   }
+
+  const accessToken = (await res.json())[0]?.access_token as string | undefined;
+
+  return accessToken;
 }
 
-async function getEasyAuthCookie(
+async function resolveUserAssertion(
   req: HttpRequest,
 ): Promise<string | undefined> {
   const cookie = req.headers.get("cookie");
@@ -94,17 +57,7 @@ async function getEasyAuthCookie(
 
   if (!cookie?.includes("AppServiceAuthSession=") || !host) return;
 
-  const proto = resolveRequestProto(req);
-
-  const identities = await httpGetJson<EasyAuthIdentity[]>(
-    `${proto}://${host}/.auth/me`,
-    { cookie },
-  );
-
-  return (
-    identities.find((i) => i.access_token)?.access_token ??
-    identities.find((i) => i.id_token)?.id_token
-  );
+  return await fetchAccessTokenFromEasyAuth(cookie, host);
 }
 
 async function exchangeTokenOnBehalfOf(userAssertion: string): Promise<string> {
@@ -137,17 +90,9 @@ async function exchangeTokenOnBehalfOf(userAssertion: string): Promise<string> {
   return result.accessToken;
 }
 
-/* =========================
- * Services
- * ========================= */
-
 const graphApiService = new GraphApiService(
   getOptionalEnv("GRAPH_ENDPOINT", "https://graph.microsoft.com/v1.0"),
 );
-
-/* =========================
- * Response helpers
- * ========================= */
 
 function ok(body: unknown): HttpResponseInit {
   return { status: 200, jsonBody: body };
@@ -182,11 +127,6 @@ async function httpTrigger(
     const token = await exchangeTokenOnBehalfOf(assertion);
     const me = await graphApiService.getMe(token);
 
-    context.log("success", {
-      userId: me.id,
-      upn: me.userPrincipalName,
-    });
-
     return ok({
       message: "Graph call succeeded via OBO",
       me,
@@ -196,6 +136,7 @@ async function httpTrigger(
       context.warn(`Graph API error: ${e.statusCode}`, { message: e.message });
       return fail(e);
     }
+
     context.error("failed", e);
     return fail(e);
   }
